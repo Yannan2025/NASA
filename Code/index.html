@@ -15,6 +15,7 @@
     <section class="intro">
       <h2>Welcome!</h2>
       <div id="space-term" class="space-term"></div>
+      <div id="did-you-know" class="did-you-know"></div>
       <p>Choose a date range and discover amazing space images from NASA's APOD archive.</p>
       <form id="date-range-form">
         <label>
@@ -49,7 +50,31 @@
   // NASA APOD API key (use your own for production)
   const NASA_API_KEY = 'DEMO_KEY';
 
+  // Helper to get 9 consecutive days from start date
+  function getDateRange(startDate, endDate) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const diff = (end - start) / (1000 * 60 * 60 * 24);
+    // If range is less than 8 days, extend end date to get 9 days if possible
+    if (diff < 8) {
+      const newEnd = new Date(start);
+      newEnd.setDate(start.getDate() + 8);
+      // Don't go past today
+      const today = new Date();
+      if (newEnd > today) newEnd.setTime(today.getTime());
+      return {
+        start: formatDate(start),
+        end: formatDate(newEnd)
+      };
+    }
+    return {
+      start: formatDate(start),
+      end: formatDate(end)
+    };
+  }
+
   function formatDate(date) {
+    if (typeof date === "string") date = new Date(date);
     return date.toISOString().slice(0, 10);
   }
 
@@ -78,16 +103,23 @@
       modalImage.alt = item.title;
     } else if (item.media_type === 'video') {
       modalImage.style.display = 'none';
-      const iframe = document.createElement('iframe');
-      iframe.id = 'modal-video';
-      iframe.className = 'modal-video';
-      iframe.src = item.url;
-      iframe.setAttribute('frameborder', '0');
-      iframe.setAttribute('allowfullscreen', '');
-      iframe.style.width = '100%';
-      iframe.style.maxHeight = '350px';
-      iframe.style.marginBottom = '1rem';
-      modalContent.insertBefore(iframe, modalTitle);
+      let embed;
+      if (item.url.includes('youtube.com') || item.url.includes('youtu.be') || item.url.includes('vimeo.com')) {
+        embed = document.createElement('iframe');
+        embed.src = item.url;
+        embed.setAttribute('frameborder', '0');
+        embed.setAttribute('allowfullscreen', '');
+        embed.className = 'modal-video';
+      } else {
+        embed = document.createElement('a');
+        embed.href = item.url;
+        embed.target = '_blank';
+        embed.rel = 'noopener';
+        embed.className = 'modal-video-link';
+        embed.textContent = 'Watch Video';
+      }
+      embed.id = 'modal-video';
+      modalContent.insertBefore(embed, modalTitle);
     }
     modalTitle.textContent = item.title;
     modalDate.textContent = item.date;
@@ -101,12 +133,15 @@
 
   function renderGallery(items) {
     const gallery = document.getElementById('gallery');
+    // Remove loading message before rendering gallery
     gallery.innerHTML = '';
-    if (!items.length) {
+    // Only display up to 9 items
+    const displayItems = items.filter(item => item.media_type === 'image' || item.media_type === 'video').slice(0, 9);
+    if (!displayItems.length) {
       gallery.innerHTML = '<p>No images found for this range.</p>';
       return;
     }
-    items.forEach(item => {
+    displayItems.forEach(item => {
       const div = document.createElement('div');
       div.className = 'gallery-item';
       if (item.media_type === 'image') {
@@ -117,19 +152,26 @@
             <p>${item.date}</p>
           </div>
         `;
-        div.addEventListener('click', () => openModal(item));
       } else if (item.media_type === 'video') {
+        // Try to embed YouTube or Vimeo, otherwise show a link
+        let videoEmbed = '';
+        if (item.url.includes('youtube.com') || item.url.includes('youtu.be') || item.url.includes('vimeo.com')) {
+          videoEmbed = `<iframe src="${item.url}" frameborder="0" allowfullscreen class="gallery-video"></iframe>`;
+        } else {
+          videoEmbed = `<a href="${item.url}" target="_blank" rel="noopener" class="gallery-video-link">Watch Video</a>`;
+        }
         div.innerHTML = `
           <div class="video-thumb">
-            <iframe src="${item.url}" frameborder="0" allowfullscreen class="gallery-video"></iframe>
+            ${videoEmbed}
           </div>
           <div class="gallery-info">
             <h3>${item.title}</h3>
             <p>${item.date}</p>
           </div>
         `;
-        div.addEventListener('click', () => openModal(item));
       }
+      // Add event listener to open modal with full details
+      div.addEventListener('click', () => openModal(item));
       gallery.appendChild(div);
     });
   }
@@ -154,7 +196,9 @@
       showError('Please select a range of 9 days or fewer.');
       return;
     }
-    const url = `https://api.nasa.gov/planetary/apod?api_key=${NASA_API_KEY}&start_date=${startDate}&end_date=${endDate}`;
+    // Always fetch 9 consecutive days from start date if possible
+    const range = getDateRange(startDate, endDate);
+    const url = `https://api.nasa.gov/planetary/apod?api_key=${NASA_API_KEY}&start_date=${range.start}&end_date=${range.end}`;
     const gallery = document.getElementById('gallery');
     // Show loading message
     gallery.innerHTML = '<div class="loading">Loading NASA images...</div>';
@@ -163,7 +207,7 @@
       const data = await res.json();
       // Remove loading message and show gallery
       if (Array.isArray(data)) {
-        renderGallery(data);
+        renderGallery(data.slice(0, 9));
       } else {
         showError(data.msg || 'No images found.');
         gallery.innerHTML = '';
@@ -188,13 +232,33 @@
     "Pulsar: a highly magnetized rotating neutron star that emits beams of electromagnetic radiation."
   ];
 
+  // Did You Know facts
+  const DID_YOU_KNOW = [
+    "Did you know? The Sun accounts for about 99.86% of the mass in our solar system.",
+    "Did you know? A day on Venus is longer than a year on Venus.",
+    "Did you know? Neutron stars can spin at a rate of 600 rotations per second.",
+    "Did you know? The largest volcano in the solar system is Olympus Mons on Mars.",
+    "Did you know? There are more trees on Earth than stars in the Milky Way.",
+    "Did you know? Jupiter has the shortest day of all the planets.",
+    "Did you know? The footprints on the Moon will be there for millions of years.",
+    "Did you know? Saturn could float in water because it is mostly made of gas.",
+    "Did you know? The hottest planet in our solar system is Venus.",
+    "Did you know? There are more stars in the universe than grains of sand on Earth."
+  ];
+
   function showRandomSpaceTerm() {
     const idx = Math.floor(Math.random() * SPACE_TERMS.length);
     document.getElementById('space-term').textContent = SPACE_TERMS[idx];
   }
 
-  // Show a random space term on load
+  function showRandomDidYouKnow() {
+    const idx = Math.floor(Math.random() * DID_YOU_KNOW.length);
+    document.getElementById('did-you-know').textContent = DID_YOU_KNOW[idx];
+  }
+
+  // Show a random space term and a random "Did You Know?" fact on load
   showRandomSpaceTerm();
+  showRandomDidYouKnow();
 
   // Modal close events
   document.getElementById('modal-close').onclick = closeModal;
