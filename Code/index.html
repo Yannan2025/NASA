@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>NASA Space Explorer</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>NASA Space Explorer</h1>
+    <p class="subtitle">Explore the universe with NASA's Astronomy Picture of the Day</p>
+  </header>
+  <main>
+    <section class="intro">
+      <h2>Welcome!</h2>
+      <div id="space-term" class="space-term"></div>
+      <p>Choose a date range and discover amazing space images from NASA's APOD archive.</p>
+      <form id="date-range-form">
+        <label>
+          Start Date:
+          <input type="date" id="start-date" required>
+        </label>
+        <label>
+          End Date:
+          <input type="date" id="end-date" required>
+        </label>
+        <button type="submit">Get Space Images</button>
+        <span id="date-error" class="error"></span>
+      </form>
+    </section>
+    <section class="gallery" id="gallery">
+      <!-- Gallery items will be dynamically inserted here by your JavaScript -->
+    </section>
+  </main>
+  <footer>
+    <p>Powered by NASA APOD API &copy; 2025</p>
+  </footer>
+  <div id="modal-backdrop" class="modal-backdrop" style="display:none;">
+    <div class="modal-content" id="modal-content">
+      <button class="modal-close" id="modal-close" title="Close">&times;</button>
+      <img id="modal-image" class="modal-image" src="" alt="" />
+      <h2 id="modal-title"></h2>
+      <p id="modal-date"></p>
+      <p id="modal-explanation"></p>
+    </div>
+  </div>
+  <script>
+  // NASA APOD API key (use your own for production)
+  const NASA_API_KEY = 'DEMO_KEY';
+
+  function formatDate(date) {
+    return date.toISOString().slice(0, 10);
+  }
+
+  function showError(msg) {
+    document.getElementById('date-error').textContent = msg;
+  }
+
+  function clearError() {
+    document.getElementById('date-error').textContent = '';
+  }
+
+  function openModal(item) {
+    const modalImage = document.getElementById('modal-image');
+    const modalTitle = document.getElementById('modal-title');
+    const modalDate = document.getElementById('modal-date');
+    const modalExplanation = document.getElementById('modal-explanation');
+    const modalContent = document.getElementById('modal-content');
+
+    // Remove previous video if any
+    const oldVideo = document.getElementById('modal-video');
+    if (oldVideo) oldVideo.remove();
+
+    if (item.media_type === 'image') {
+      modalImage.style.display = '';
+      modalImage.src = item.url;
+      modalImage.alt = item.title;
+    } else if (item.media_type === 'video') {
+      modalImage.style.display = 'none';
+      const iframe = document.createElement('iframe');
+      iframe.id = 'modal-video';
+      iframe.className = 'modal-video';
+      iframe.src = item.url;
+      iframe.setAttribute('frameborder', '0');
+      iframe.setAttribute('allowfullscreen', '');
+      iframe.style.width = '100%';
+      iframe.style.maxHeight = '350px';
+      iframe.style.marginBottom = '1rem';
+      modalContent.insertBefore(iframe, modalTitle);
+    }
+    modalTitle.textContent = item.title;
+    modalDate.textContent = item.date;
+    modalExplanation.textContent = item.explanation;
+    document.getElementById('modal-backdrop').style.display = 'flex';
+  }
+
+  function closeModal() {
+    document.getElementById('modal-backdrop').style.display = 'none';
+  }
+
+  function renderGallery(items) {
+    const gallery = document.getElementById('gallery');
+    gallery.innerHTML = '';
+    if (!items.length) {
+      gallery.innerHTML = '<p>No images found for this range.</p>';
+      return;
+    }
+    items.forEach(item => {
+      const div = document.createElement('div');
+      div.className = 'gallery-item';
+      if (item.media_type === 'image') {
+        div.innerHTML = `
+          <img src="${item.url}" alt="${item.title}">
+          <div class="gallery-info">
+            <h3>${item.title}</h3>
+            <p>${item.date}</p>
+          </div>
+        `;
+        div.addEventListener('click', () => openModal(item));
+      } else if (item.media_type === 'video') {
+        div.innerHTML = `
+          <div class="video-thumb">
+            <iframe src="${item.url}" frameborder="0" allowfullscreen class="gallery-video"></iframe>
+          </div>
+          <div class="gallery-info">
+            <h3>${item.title}</h3>
+            <p>${item.date}</p>
+          </div>
+        `;
+        div.addEventListener('click', () => openModal(item));
+      }
+      gallery.appendChild(div);
+    });
+  }
+
+  document.getElementById('date-range-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    clearError();
+    const startDate = document.getElementById('start-date').value;
+    const endDate = document.getElementById('end-date').value;
+    if (!startDate || !endDate) {
+      showError('Please select both dates.');
+      return;
+    }
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const diff = (end - start) / (1000 * 60 * 60 * 24);
+    if (diff < 0) {
+      showError('End date must be after start date.');
+      return;
+    }
+    if (diff > 8) {
+      showError('Please select a range of 9 days or fewer.');
+      return;
+    }
+    const url = `https://api.nasa.gov/planetary/apod?api_key=${NASA_API_KEY}&start_date=${startDate}&end_date=${endDate}`;
+    const gallery = document.getElementById('gallery');
+    // Show loading message
+    gallery.innerHTML = '<div class="loading">Loading NASA images...</div>';
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      // Remove loading message and show gallery
+      if (Array.isArray(data)) {
+        renderGallery(data);
+      } else {
+        showError(data.msg || 'No images found.');
+        gallery.innerHTML = '';
+      }
+    } catch {
+      showError('Failed to fetch images.');
+      gallery.innerHTML = '';
+    }
+  });
+
+  // Space Terms of the Day
+  const SPACE_TERMS = [
+    "Galaxy: a huge collection of gas, dust, and billions of stars.",
+    "Nebula: a giant cloud of dust and gas in space.",
+    "Black Hole: a region of space having a gravitational field so intense that no matter or radiation can escape.",
+    "Supernova: a powerful and luminous stellar explosion.",
+    "Light Year: the distance light travels in one year, about 5.88 trillion miles.",
+    "Exoplanet: a planet that orbits a star outside the solar system.",
+    "Red Giant: a luminous giant star of low or intermediate mass in a late phase of stellar evolution.",
+    "Quasar: an extremely luminous active galactic nucleus.",
+    "Comet: an icy, small Solar System body that, when passing close to the Sun, warms and begins to release gases.",
+    "Pulsar: a highly magnetized rotating neutron star that emits beams of electromagnetic radiation."
+  ];
+
+  function showRandomSpaceTerm() {
+    const idx = Math.floor(Math.random() * SPACE_TERMS.length);
+    document.getElementById('space-term').textContent = SPACE_TERMS[idx];
+  }
+
+  // Show a random space term on load
+  showRandomSpaceTerm();
+
+  // Modal close events
+  document.getElementById('modal-close').onclick = closeModal;
+  document.getElementById('modal-backdrop').onclick = function(e) {
+    if (e.target === this) closeModal();
+  };
+  </script>
+</body>
+</html>
